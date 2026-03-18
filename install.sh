@@ -6,6 +6,12 @@ INSTALL_DIR="/opt/kblight"
 BIN_LINK="/usr/local/bin/kblight"
 DESKTOP_FILE="/usr/share/applications/kblight.desktop"
 
+# Ensure we can run sudo
+if ! sudo -v 2>/dev/null; then
+    echo "Error: This script requires sudo privileges. Please run with sudo or ensure sudo access."
+    exit 1
+fi
+
 echo "Installing kblight..."
 
 # Check/install dependencies
