@@ -21,6 +21,14 @@ fi
 
 echo "  Dependencies OK"
 
+# Allow ectool to run without password prompt (needed for GUI/desktop use)
+SUDOERS_FILE="/etc/sudoers.d/kblight"
+sudo tee "$SUDOERS_FILE" > /dev/null <<EOF
+ALL ALL=(root) NOPASSWD: $INSTALL_DIR/ectool
+EOF
+sudo chmod 0440 "$SUDOERS_FILE"
+echo "  Sudoers rule added for ectool"
+
 # Copy files to /opt/kblight
 sudo mkdir -p "$INSTALL_DIR"
 sudo cp "$SCRIPT_DIR/kblight.py" "$INSTALL_DIR/kblight.py"
