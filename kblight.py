@@ -19,7 +19,9 @@ import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 ECTOOL = os.path.join(SCRIPT_DIR, "ectool")
-CONFIG_FILE = os.path.join(SCRIPT_DIR, "kblight.json")
+CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".config", "kblight")
+os.makedirs(CONFIG_DIR, exist_ok=True)
+CONFIG_FILE = os.path.join(CONFIG_DIR, "kblight.json")
 
 PRESETS = {
     "white":  (255, 255, 255),
