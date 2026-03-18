@@ -17,7 +17,7 @@ import os
 import subprocess
 import sys
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 ECTOOL = os.path.join(SCRIPT_DIR, "ectool")
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "kblight.json")
 
