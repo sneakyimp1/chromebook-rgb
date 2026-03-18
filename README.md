@@ -14,11 +14,9 @@ A simple GUI and CLI tool for controlling the RGB keyboard backlight on Chromebo
 
 - Python 3
 - python3-tk
-- `ectool` binary (ChromeOS EC tool with `rgbkbd` support)
+- `ectool` binary (ChromeOS EC tool with `rgbkbd` support) - included in this repo
 
 ## Install
-
-Place your `ectool` binary in the same directory as `kblight.py`, then run:
 
 ```bash
 bash install.sh
