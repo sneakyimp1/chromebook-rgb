@@ -5,12 +5,17 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 INSTALL_DIR="/opt/kblight"
 BIN_LINK="/usr/local/bin/kblight"
 DESKTOP_FILE="/usr/share/applications/kblight.desktop"
+SLEEP_HOOK="/usr/lib/systemd/system-sleep/kblight"
 
 # Ensure we can run sudo
 if ! sudo -v 2>/dev/null; then
     echo "Error: This script requires sudo privileges. Please run with sudo or ensure sudo access."
     exit 1
 fi
+
+# Resolve the real user (even if running under sudo)
+REAL_USER="${SUDO_USER:-$USER}"
+REAL_HOME=$(eval echo "~$REAL_USER")
 
 echo "Installing kblight..."
 
@@ -59,7 +64,7 @@ Keywords=keyboard;backlight;rgb;light;
 EOF
 echo "  Desktop entry created"
 
-# Systemd service
+# Systemd service (runs as the installing user to read their config)
 SERVICE_FILE="/etc/systemd/system/kblight.service"
 sudo tee "$SERVICE_FILE" > /dev/null <<EOF
 [Unit]
@@ -68,6 +73,7 @@ After=multi-user.target
 
 [Service]
 Type=oneshot
+User=$REAL_USER
 ExecStart=$INSTALL_DIR/kblight.py --restore
 RemainAfterExit=yes
 
@@ -79,8 +85,23 @@ sudo systemctl daemon-reload
 sudo systemctl enable kblight.service
 echo "  Systemd service enabled"
 
+# Sleep/wake hook — turns backlight off on suspend, restores on wake
+sudo tee "$SLEEP_HOOK" > /dev/null <<EOF
+#!/bin/bash
+case "\$1" in
+  pre)
+    $INSTALL_DIR/ectool rgbkbd clear 0
+    ;;
+  post)
+    su $REAL_USER -c "$INSTALL_DIR/kblight.py --restore"
+    ;;
+esac
+EOF
+sudo chmod +x "$SLEEP_HOOK"
+echo "  Sleep/wake hook installed"
+
 echo ""
 echo "Done! You can now:"
 echo "  - Search 'KB Backlight' in your app launcher"
 echo "  - Run 'kblight' from the terminal"
-echo "  - Settings are restored automatically at boot"
+echo "  - Settings are restored automatically at boot and after sleep"

@@ -65,9 +65,13 @@ def rgb_to_hex(r, g, b):
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
-def set_color(r, g, b):
-    """Set keyboard backlight color via ectool and save."""
-    value = rgb_to_ectool_value(r, g, b)
+def apply_to_hardware():
+    """Send the current color+brightness to the keyboard via ectool."""
+    config = load_config()
+    r, g, b = config["color"]
+    bright = config["brightness"] / 100.0
+    ar, ag, ab = int(r * bright), int(g * bright), int(b * bright)
+    value = rgb_to_ectool_value(ar, ag, ab)
     cmd = ["sudo", ECTOOL, "rgbkbd", "clear", value]
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
@@ -77,20 +81,19 @@ def set_color(r, g, b):
     except FileNotFoundError:
         print(f"ectool not found at {ECTOOL}", file=sys.stderr)
         return False
-    save_config(color=(r, g, b))
     return True
+
+
+def set_color(r, g, b):
+    """Set keyboard backlight color and apply."""
+    save_config(color=(r, g, b))
+    return apply_to_hardware()
 
 
 def set_brightness(val):
-    """Set keyboard brightness via ectool pwmsetkblight and save."""
-    cmd = ["sudo", ECTOOL, "pwmsetkblight", str(val)]
-    try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        print(f"ectool error: {e.stderr}", file=sys.stderr)
-        return False
+    """Set keyboard brightness and apply."""
     save_config(brightness=int(val))
-    return True
+    return apply_to_hardware()
 
 
 def parse_color(color_str):
@@ -112,10 +115,7 @@ def parse_color(color_str):
 
 def restore():
     """Restore last saved settings."""
-    config = load_config()
-    r, g, b = config["color"]
-    set_color(r, g, b)
-    set_brightness(config["brightness"])
+    apply_to_hardware()
 
 
 def run_cli(args):
