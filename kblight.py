@@ -197,10 +197,15 @@ def run_gui():
         r, g, b = colorsys.hsv_to_rgb(hue, sat, 1.0)
         apply_color(int(r * 255), int(g * 255), int(b * 255))
 
-    root = tk.Tk()
+    root = tk.Tk(className="kblight")
     root.title("KB Backlight")
     root.resizable(False, False)
     root.config(bg="#2b2b2b")
+
+    icon_path = os.path.join(SCRIPT_DIR, "kblight_icon.png")
+    if os.path.exists(icon_path):
+        icon = tk.PhotoImage(file=icon_path)
+        root.iconphoto(True, icon)
 
     init_r, init_g, init_b = config["color"]
     init_hex = rgb_to_hex(init_r, init_g, init_b)

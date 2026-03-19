@@ -44,6 +44,7 @@ echo "  Sudoers rule added for ectool"
 sudo mkdir -p "$INSTALL_DIR"
 sudo cp "$SCRIPT_DIR/kblight.py" "$INSTALL_DIR/kblight.py"
 sudo cp "$SCRIPT_DIR/ectool" "$INSTALL_DIR/ectool"
+sudo cp "$SCRIPT_DIR/kblight_icon.png" "$INSTALL_DIR/kblight_icon.png"
 sudo chmod +x "$INSTALL_DIR/kblight.py" "$INSTALL_DIR/ectool"
 echo "  Installed to $INSTALL_DIR"
 
@@ -57,10 +58,11 @@ sudo tee "$DESKTOP_FILE" > /dev/null <<'EOF'
 Name=KB Backlight
 Comment=Keyboard backlight color and brightness control
 Exec=/opt/kblight/kblight.py
-Icon=preferences-desktop-keyboard
+Icon=/opt/kblight/kblight_icon.png
 Type=Application
 Categories=Utility;Settings;HardwareSettings;
 Keywords=keyboard;backlight;rgb;light;
+StartupWMClass=kblight
 EOF
 echo "  Desktop entry created"
 
