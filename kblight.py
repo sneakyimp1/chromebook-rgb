@@ -8,14 +8,18 @@ Usage:
   kblight --brightness 80          Set brightness (0-100)
   kblight --color red --brightness 50   Both at once
   kblight --off                    Turn off backlight
+  kblight --demo flow              Run a demo effect (flow, dot, rainbow, stop)
   kblight --restore                Restore last saved settings (used at boot)
 """
 
 import argparse
+import colorsys
 import json
 import os
 import subprocess
 import sys
+import threading
+import time
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 ECTOOL = os.path.join(SCRIPT_DIR, "ectool")
@@ -65,14 +69,9 @@ def rgb_to_hex(r, g, b):
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
-def apply_to_hardware():
-    """Send the current color+brightness to the keyboard via ectool."""
-    config = load_config()
-    r, g, b = config["color"]
-    bright = config["brightness"] / 100.0
-    ar, ag, ab = int(r * bright), int(g * bright), int(b * bright)
-    value = rgb_to_ectool_value(ar, ag, ab)
-    cmd = ["sudo", ECTOOL, "rgbkbd", "clear", value]
+def run_ectool(*args):
+    """Run an ectool command with sudo. Returns True on success."""
+    cmd = ["sudo", ECTOOL] + list(args)
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
@@ -84,8 +83,68 @@ def apply_to_hardware():
     return True
 
 
+def apply_to_hardware():
+    """Send the current color+brightness to the keyboard via ectool."""
+    config = load_config()
+    r, g, b = config["color"]
+    bright = config["brightness"] / 100.0
+    ar, ag, ab = int(r * bright), int(g * bright), int(b * bright)
+    value = rgb_to_ectool_value(ar, ag, ab)
+    return run_ectool("rgbkbd", "clear", value)
+
+
+def run_demo(mode):
+    """Run an rgbkbd demo mode. 0=Off, 1=Flow, 2=Dot."""
+    return run_ectool("rgbkbd", "demo", str(mode))
+
+
+def stop_demo():
+    """Stop any running demo and restore saved color."""
+    stop_rainbow()
+    run_ectool("rgbkbd", "demo", "0")
+    apply_to_hardware()
+
+
+# Rainbow cycle state
+_rainbow_thread = None
+_rainbow_stop = threading.Event()
+
+
+def rainbow_cycle(step_delay=0.25, hue_step=0.02):
+    """Cycle through rainbow colors on the whole keyboard."""
+    _rainbow_stop.clear()
+    config = load_config()
+    bright = config["brightness"] / 100.0
+    hue = 0.0
+    while not _rainbow_stop.is_set():
+        r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+        ar, ag, ab = int(r * 255 * bright), int(g * 255 * bright), int(b * 255 * bright)
+        value = rgb_to_ectool_value(ar, ag, ab)
+        run_ectool("rgbkbd", "clear", value)
+        hue = (hue + hue_step) % 1.0
+        _rainbow_stop.wait(step_delay)
+
+
+def start_rainbow():
+    """Start the rainbow cycle in a background thread."""
+    global _rainbow_thread
+    stop_rainbow()
+    _rainbow_thread = threading.Thread(target=rainbow_cycle, daemon=True)
+    _rainbow_thread.start()
+
+
+def stop_rainbow():
+    """Stop the rainbow cycle if running."""
+    global _rainbow_thread
+    _rainbow_stop.set()
+    if _rainbow_thread is not None:
+        _rainbow_thread.join(timeout=1)
+        _rainbow_thread = None
+
+
 def set_color(r, g, b):
     """Set keyboard backlight color and apply."""
+    stop_rainbow()
     save_config(color=(r, g, b))
     return apply_to_hardware()
 
@@ -135,10 +194,23 @@ def run_cli(args):
     if args.brightness is not None:
         set_brightness(args.brightness)
 
+    if args.demo:
+        if args.demo == "stop":
+            stop_demo()
+        elif args.demo == "rainbow":
+            start_rainbow()
+            try:
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                stop_demo()
+        else:
+            demo_modes = {"flow": 1, "dot": 2}
+            run_demo(demo_modes[args.demo])
+
 
 def run_gui():
     """Launch the GUI."""
-    import colorsys
     import math
     import tkinter as tk
 
@@ -266,6 +338,23 @@ def run_gui():
     brightness_slider.set(config["brightness"])
     brightness_slider.pack(fill="x")
 
+    # Demo effects
+    demo_frame = tk.LabelFrame(root, text="Demo Effects", padx=5, pady=5,
+                                bg="#2b2b2b", fg="white")
+    demo_frame.pack(padx=10, pady=5, fill="x")
+
+    demos = [("Flow", 1), ("Dot", 2)]
+    for i, (name, mode) in enumerate(demos):
+        tk.Button(demo_frame, text=name, width=8,
+                  bg="#444444", fg="white",
+                  command=lambda m=mode: run_demo(m)).grid(row=0, column=i, padx=2, pady=2)
+    tk.Button(demo_frame, text="Rainbow", width=8,
+              bg="#444444", fg="white",
+              command=start_rainbow).grid(row=0, column=len(demos), padx=2, pady=2)
+    tk.Button(demo_frame, text="Stop", width=8,
+              bg="#663333", fg="white",
+              command=stop_demo).grid(row=0, column=len(demos) + 1, padx=2, pady=2)
+
     # Off button
     tk.Button(root, text="Off", command=turn_off, width=20,
               bg="#333333", fg="white").pack(pady=(5, 10))
@@ -280,10 +369,12 @@ def main():
                         help=f"Color: preset name ({preset_names}) or R,G,B (0-255)")
     parser.add_argument("--brightness", "-b", type=int, help="Brightness 0-100")
     parser.add_argument("--off", action="store_true", help="Turn off backlight")
+    parser.add_argument("--demo", type=str, choices=["flow", "dot", "rainbow", "stop"],
+                        help="Run a demo effect (flow, dot, rainbow) or stop")
     parser.add_argument("--restore", action="store_true", help="Restore last saved settings")
     args = parser.parse_args()
 
-    if args.color or args.brightness is not None or args.off or args.restore:
+    if args.color or args.brightness is not None or args.off or args.demo or args.restore:
         run_cli(args)
     else:
         run_gui()
